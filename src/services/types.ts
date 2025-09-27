@@ -150,3 +150,13 @@ export interface AnimatedTitleProps {
   // Optional class for inner text element (color/size overrides)
   textClassName?: string;
 }
+
+// Menu container props
+export interface MenuContainerProps {
+  children: React.ReactNode;
+}
+
+export interface MenuButtonContainerProps {
+  children: React.ReactNode;
+  className?: string;
+}
