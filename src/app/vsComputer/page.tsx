@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { getAuth, onAuthStateChanged, type User } from 'firebase/auth';
 import Board from './Board';
 import { BoardSize, BoardState, DifficultyLevel, BoardNumber } from '@/services/types';
 import { isBoardDead } from '@/services/logic';
@@ -54,7 +55,20 @@ const Game = () => {
 
     // Helper function to safely get ID token with error handling
     const getIdTokenSafe = async (): Promise<string | null> => {
-        if (!user) {
+        let activeUser = user;
+
+        // If Zustand store hasn't hydrated yet, wait for Firebase Auth to settle
+        if (!activeUser) {
+            const auth = getAuth();
+            activeUser = await new Promise<User | null>((resolve) => {
+                const unsubscribe = onAuthStateChanged(auth, (current) => {
+                    unsubscribe();
+                    resolve(current);
+                });
+            });
+        }
+
+        if (!activeUser) {
             console.log('No user found in getIdTokenSafe');
             toast.error('User not authenticated');
             router.push('/');
@@ -62,13 +76,13 @@ const Game = () => {
         }
 
         try {
-            console.log('Getting ID token for user:', user.uid);
+            console.log('Getting ID token for user:', activeUser.uid);
             
-            // First, ensure the user is still authenticated
-            await user.reload(); // Refresh user state
+            // Refresh user state
+            await activeUser.reload();
             
-            // Get a fresh token
-            const token = await user.getIdToken(true); // Force refresh to get latest token
+            // Force refresh to get the latest token
+            const token = await activeUser.getIdToken(true);
             
             if (!token) {
                 throw new Error('Failed to get token - token is null');

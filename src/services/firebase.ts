@@ -10,7 +10,7 @@ import {
 import { getFirestore } from 'firebase/firestore';
 
 // Initialize Firebase
-// Using environment variables for Firebase configuration with fallback to demo config
+// Using environment variables for Firebase configuration with fallback for build environments
 const firebaseConfig = {
     apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "AIzaSyAFRKoQm30ekwQQOeunqB3X6D26wOP8huk",
     authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "notakto-3359b.firebaseapp.com",
