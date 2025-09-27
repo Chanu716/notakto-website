@@ -53,11 +53,15 @@ const Game = () => {
     const { canShowToast, triggerToastCooldown, resetCooldown } = useToastCooldown(4000);
     const router = useRouter();
 
-    // Helper function to safely get ID token with error handling
+    // Helper function to safely get ID token with hydration fallback and caching
+    let cachedToken: string | null = null;
+    let tokenFetchedAt = 0;
+    const TOKEN_TTL_MS = 60_000; // 60s soft TTL
+
     const getIdTokenSafe = async (): Promise<string | null> => {
         let activeUser = user;
 
-        // If Zustand store hasn't hydrated yet, wait for Firebase Auth to settle
+        // Zustand store hydration fallback
         if (!activeUser) {
             const auth = getAuth();
             activeUser = await new Promise<User | null>((resolve) => {
@@ -75,26 +79,29 @@ const Game = () => {
             return null;
         }
 
+        // Use cached token if it is still fresh
+        const now = Date.now();
+        if (cachedToken && (now - tokenFetchedAt) < TOKEN_TTL_MS) {
+            return cachedToken;
+        }
+
         try {
-            console.log('Getting ID token for user:', activeUser.uid);
-            
-            // Refresh user state
+            // Refresh user state and force refresh to get the latest token
             await activeUser.reload();
-            
-            // Force refresh to get the latest token
-            const token = await activeUser.getIdToken(true);
-            
+            let token = await activeUser.getIdToken();
+            if (!token) {
+                token = await activeUser.getIdToken(true);
+            }
+
             if (!token) {
                 throw new Error('Failed to get token - token is null');
             }
-            
-            console.log('Successfully obtained ID token, length:', token.length);
+
+            cachedToken = token;
+            tokenFetchedAt = now;
             return token;
-            
         } catch (tokenError) {
             console.error('Token acquisition failed:', tokenError);
-            
-            // If token acquisition fails, the user might need to re-authenticate
             toast.error('Authentication session expired. Please sign in again.');
             router.push('/');
             return null;
@@ -140,22 +147,22 @@ const Game = () => {
             if (!idToken) return;
 
             const data = await makeMove(sessionId, boardIndex, cellIndex, idToken);
-                if (data.success) {
-                    setBoards(data.gameState.boards);
-                    setCurrentPlayer(data.gameState.currentPlayer);
-                    setGameHistory(data.gameState.gameHistory);
-                    playMoveSound(sfxMute);
+            if (data.success) {
+                setBoards(data.gameState.boards);
+                setCurrentPlayer(data.gameState.currentPlayer);
+                setGameHistory(data.gameState.gameHistory);
+                playMoveSound(sfxMute);
 
-                    if (data.gameOver) {
-                        setWinner(data.gameState.winner);
-                        setShowWinnerModal(true);
-                        playWinSound(sfxMute);
-                    }
-                } else if ('error' in data) {
-                    toast.error(data.error || 'Invalid move');
-                } else {
-                    toast.error('Unexpected response from server');
+                if (data.gameOver) {
+                    setWinner(data.gameState.winner);
+                    setShowWinnerModal(true);
+                    playWinSound(sfxMute);
                 }
+            } else if ('error' in data) {
+                toast.error(data.error || 'Invalid move');
+            } else {
+                toast.error('Unexpected response from server');
+            }
         } catch (error) {
             toast.error('Error making move');
         } finally {
@@ -319,7 +326,6 @@ const Game = () => {
                     <h2 className="text-red-600 text-[80px] mb-5 text-center">
                         {currentPlayer === 1 ? "Your Turn" : "Computer's Turn"}
                     </h2>
-
                 </div>
 
                 <div className="flex flex-wrap justify-center gap-4 p-4 w-full mb-20">
